@@ -3,15 +3,16 @@ from contextlib import nullcontext
 import torch
 import tiktoken
 from model import GPTConfig, MiniGPT
-
+import time
+import re
 # -----------------------------------------------------------------------------
 
-out_dir = 'pretrain1' # ignored if init_from is not 'resume'
+out_dir = 'sft_10w' # ignored if init_from is not 'resume'
 start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
-num_samples = 10 # number of samples to draw
+num_samples = 1 # number of samples to draw
 max_new_tokens = 256 # number of tokens generated in each sample
-temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
-top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
+temperature = 0.9 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+top_k = 40 # retain only the top_k most likely tokens, clamp others to have 0 probability
 seed = 1234
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
@@ -51,7 +52,7 @@ decode = lambda l: enc.decode(l)
 
 
 save_file = open(save_path, 'w', encoding='utf-8')
-
+start_time=time.time()
 # encode the beginning of the prompt
 if start.startswith('FILE:'):
     with open(start[5:], 'r', encoding='utf-8') as f:
@@ -67,14 +68,22 @@ if start.startswith('FILE:'):
                 for k in range(num_samples):
                     y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
                     print("Prompt:", start)
-                    output = decode(y[0].tolist())
+                    output_tokens = y[0].tolist()
+                    try:
+                        end_idx = output_tokens.index(50256)
+                        output_tokens = output_tokens[:end_idx]
+                    except:
+                        pass
+                    output = decode(output_tokens)
+                    #output=output[len(mes):]
+                    output=re.sub('[\uFFFD\n]', '', output)
                     print(output)
                     save_file.write(output)
                     print('---------------')
 else:
+    
     start_ids = encode(start)
     x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
-
     # run generation
     with torch.no_grad():
         with ctx:
@@ -87,9 +96,10 @@ else:
                 except:
                     pass
                 output = decode(output_tokens)
-                
+                #output=output[len(mes):]
+                output=re.sub('[\uFFFD\n]', '', output)
                 print(output)
                 save_file.write(output)
                 print('---------------')
-
+    print(f"生成时间：{time.time()-start_time:.2f}s")
 save_file.close()

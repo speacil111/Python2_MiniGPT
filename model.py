@@ -234,27 +234,46 @@ class MiniGPT(nn.Module):
         return mfu
     
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=0.9, top_k=None, repetition_penalty=1.2):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        # Initialize a tensor to keep track of the frequency of each token
+        token_counts = torch.zeros(self.config.vocab_size, device=idx.device)
+        
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
+            
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
+            
+            # apply repetition penalty
+            if repetition_penalty!=1.0:
+                for i in set(idx[0].tolist()):
+                    logits[0, i] /= repetition_penalty
+                
             # optionally crop the logits to only the top k options
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float('Inf')
+            
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
+            
             # sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)
+            if idx_next.item() == 50256:
+                break
+            # update token counts
+            for b in range(idx_next.size(0)):
+                token_counts[idx_next[b]] += 1
+            
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 

@@ -20,10 +20,13 @@ for name in names:
     with open(file_path,'r',encoding='utf-8') as file:
         for line in file:
             texts.append(json.loads(line)["text"])
+for text in texts:
+    text = text.encode('utf-8', 'ignore').decode('utf-8')
+    text = text.replace("\n", "")
 train_data, val_data = train_test_split(texts,test_size=0.1)
 ###
-train_data, val_data = "\n".join(train_data), "\n".join(val_data)
-train_data, val_data =enc.encode_ordinary(train_data),enc.encode_ordinary(val_data)
+train_data, val_data = "<|endoftext|>".join(train_data), "<|endoftext|>".join(val_data)
+train_data, val_data =enc.encode(train_data,allowed_special={'<|endoftext|>'}),enc.encode(val_data,allowed_special={'<|endoftext|>'})
 ### TODO: tokenize raw data with tiktoken encoder
 ### TODO: transform to numpy array
 train_ids, val_ids = np.array(train_data,dtype=np.uint16),np.array(val_data,dtype=np.uint16)

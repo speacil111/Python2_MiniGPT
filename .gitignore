@@ -167,3 +167,6 @@ out*/
 *.jsonl
 *.json
 *.pt
+*.docx
+*.pdf
+*.bin

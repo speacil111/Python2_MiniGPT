@@ -47,7 +47,7 @@ def get_batch_sft(split,block_size,batch_size,device):
     ix = torch.randint(int(len(data) /length) - 1, (batch_size,))
     x=torch.zeros(len(ix),block_size,dtype=torch.int64)
     y=torch.zeros(len(ix),block_size,dtype=torch.int64)
-    loss_mask=torch.ones(len(ix),block_size,dtype=torch.float64)
+    loss_mask=torch.zeros(len(ix),block_size,dtype=torch.float64)
     for i in range(len(ix)):
         data_line=data[ix[i]*length:(ix[i]+1)*length]
         ques=data_line[:q_max]
@@ -55,13 +55,15 @@ def get_batch_sft(split,block_size,batch_size,device):
         #去除所有填充符[50256]
         ques=[x for x in ques if x!=50256]
         ans=[x for x in ans if x!=50256]
-        len_ques=len(ques)
+        len_ques,len_ans=len(ques),len(ans)
         #合并，填充
         combined=ques+ans+[50256]*(length-len(ques)-len(ans))
         x[i]=torch.tensor(combined[:block_size],dtype=torch.int64)
         y[i]=torch.tensor(combined[1:block_size+1],dtype=torch.int64)
-        #ques处0，ans处1
-        loss_mask[i][:len_ques]=torch.zeros(len_ques, dtype=torch.double)
+        #ans处1
+        for j in range(block_size):
+            if j>=len_ques and j<(len_ques+len_ans) :
+                loss_mask[i][j]=1
     device_type='cuda' if 'cuda' in device else 'cpu'
     if device_type == 'cuda':
         x, y, loss_mask = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True), loss_mask.pin_memory().to(device, non_blocking=True)
